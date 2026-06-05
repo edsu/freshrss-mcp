@@ -1,11 +1,13 @@
 """MCP tool definitions for FreshRSS.
 
 Each tool does exactly one thing. All exceptions are caught at the
-tool boundary and returned as "Error: ..." strings so the MCP protocol
-never sees an uncaught exception.
+tool boundary and returned as {"error": "..."} dicts so the MCP protocol
+never sees an uncaught exception. Successful results are returned as
+native Python lists/dicts; FastMCP serializes them to JSON on the wire.
 """
 
 import logging
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -30,7 +32,7 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
         feed_ids: list[int] | None = None,
         since_timestamp: int | None = None,
         max_summary_length: int = 500,
-    ) -> str:
+    ) -> list[dict[str, Any]] | dict[str, str]:
         """Get unread articles from FreshRSS.
 
         Args:
@@ -39,8 +41,8 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
             since_timestamp: Only return articles published after this Unix timestamp.
             max_summary_length: Maximum characters for article summaries (default 500).
 
-        Returns a JSON-formatted list of articles with id, title, summary, url,
-        published timestamp, feed_name, is_read, and is_starred fields.
+        Returns a list of article dicts with id, title, summary, url, published
+        timestamp, feed_name, is_read, and is_starred fields, or {"error": ...}.
         """
         try:
             if feed_ids:
@@ -68,41 +70,47 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
                 d["summary"] = _truncate_summary(d["summary"], max_summary_length)
                 result.append(d)
 
-            return str(result)
+            return result
         except Exception as e:
             logger.error("get_unread_articles failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
     async def get_articles_by_feed(
         feed_id: int,
         limit: int = 20,
         include_read: bool = False,
-    ) -> str:
+        since_timestamp: int | None = None,
+    ) -> list[dict[str, Any]] | dict[str, str]:
         """Get articles from a specific feed.
 
         Args:
             feed_id: ID of the feed to fetch articles from.
             limit: Maximum number of articles to return (1-100, default 20).
             include_read: Whether to include already-read articles (default False).
+            since_timestamp: Only return articles published after this Unix timestamp.
 
-        Returns a JSON-formatted list of article objects.
+        Returns a list of article dicts, or {"error": ...}.
         """
         try:
             articles = await client.get_articles(
-                feed_id=feed_id, limit=limit, include_read=include_read
+                feed_id=feed_id,
+                limit=limit,
+                include_read=include_read,
+                since_timestamp=since_timestamp,
             )
-            return str([a.to_dict() for a in articles])
+            return [a.to_dict() for a in articles]
         except Exception as e:
             logger.error("get_articles_by_feed failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
     async def search_articles(
         query: str,
         limit: int = 10,
         feed_ids: list[int] | None = None,
-    ) -> str:
+        since_timestamp: int | None = None,
+    ) -> list[dict[str, Any]] | dict[str, str]:
         """Search articles by keyword in title or summary.
 
         Performs client-side filtering since FreshRSS API lacks server-side search.
@@ -111,8 +119,9 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
             query: Search query string (case-insensitive).
             limit: Maximum number of matching articles to return (default 10).
             feed_ids: Optional list of feed IDs to search within.
+            since_timestamp: Only return articles published after this Unix timestamp.
 
-        Returns a JSON-formatted list of matching article objects.
+        Returns a list of matching article dicts, or {"error": ...}.
         """
         try:
             fetch_limit = limit * 3
@@ -120,11 +129,18 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
                 all_articles = []
                 for fid in feed_ids:
                     articles = await client.get_articles(
-                        feed_id=fid, limit=fetch_limit, include_read=True
+                        feed_id=fid,
+                        limit=fetch_limit,
+                        include_read=True,
+                        since_timestamp=since_timestamp,
                     )
                     all_articles.extend(articles)
             else:
-                all_articles = await client.get_articles(limit=fetch_limit, include_read=True)
+                all_articles = await client.get_articles(
+                    limit=fetch_limit,
+                    include_read=True,
+                    since_timestamp=since_timestamp,
+                )
 
             query_lower = query.lower()
             matching = [
@@ -132,36 +148,36 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
                 for a in all_articles
                 if query_lower in a.title.lower() or query_lower in a.summary.lower()
             ]
-            return str([a.to_dict() for a in matching[:limit]])
+            return [a.to_dict() for a in matching[:limit]]
         except Exception as e:
             logger.error("search_articles failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
-    async def list_feeds() -> str:
+    async def list_feeds() -> list[dict[str, Any]] | dict[str, str]:
         """List all subscribed feeds with unread counts.
 
-        Returns a JSON-formatted list of feed objects with id, name, url,
-        and unread_count fields.
+        Returns a list of feed dicts with id, name, url, and unread_count fields,
+        or {"error": ...}.
         """
         try:
             feeds = await client.list_feeds()
             unread_counts = await client.get_unread_counts()
             for feed in feeds:
                 feed.unread_count = unread_counts.get(feed.id, 0)
-            return str([f.to_dict() for f in feeds])
+            return [f.to_dict() for f in feeds]
         except Exception as e:
             logger.error("list_feeds failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
-    async def get_feed_info(feed_id: int) -> str:
+    async def get_feed_info(feed_id: int) -> dict[str, Any]:
         """Get detailed information about a specific feed.
 
         Args:
             feed_id: ID of the feed.
 
-        Returns a JSON-formatted feed object, or an error if the feed is not found.
+        Returns a feed dict, or {"error": ...} if the feed is not found.
         """
         try:
             feeds = await client.list_feeds()
@@ -169,100 +185,98 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
             for feed in feeds:
                 if feed.id == feed_id:
                     feed.unread_count = unread_counts.get(feed.id, 0)
-                    return str(feed.to_dict())
-            return f"Error: Feed {feed_id} not found"
+                    return feed.to_dict()
+            return {"error": f"Feed {feed_id} not found"}
         except Exception as e:
             logger.error("get_feed_info failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
-    async def get_feed_stats() -> str:
+    async def get_feed_stats() -> list[dict[str, Any]] | dict[str, str]:
         """Get statistics for all feeds.
 
-        Returns a JSON-formatted list of objects with feed_id, feed_name,
-        and unread_count fields.
+        Returns a list of dicts with feed_id, feed_name, and unread_count fields,
+        or {"error": ...}.
         """
         try:
             feeds = await client.list_feeds()
             unread_counts = await client.get_unread_counts()
-            result = []
-            for feed in feeds:
-                result.append(
-                    {
-                        "feed_id": feed.id,
-                        "feed_name": feed.name,
-                        "unread_count": unread_counts.get(feed.id, 0),
-                    }
-                )
-            return str(result)
+            return [
+                {
+                    "feed_id": feed.id,
+                    "feed_name": feed.name,
+                    "unread_count": unread_counts.get(feed.id, 0),
+                }
+                for feed in feeds
+            ]
         except Exception as e:
             logger.error("get_feed_stats failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"error": str(e)}
 
     @mcp.tool()
-    async def mark_as_read(article_ids: list[int]) -> str:
+    async def mark_as_read(article_ids: list[int]) -> dict[str, Any]:
         """Mark articles as read.
 
         Args:
             article_ids: List of article IDs to mark as read.
 
-        Returns "OK" on success or an error message.
+        Returns {"ok": True} on success or {"ok": False, "error": ...}.
         """
         try:
             if not article_ids:
-                return "OK"
+                return {"ok": True}
             await client.mark_as_read(article_ids)
-            return "OK"
+            return {"ok": True}
         except Exception as e:
             logger.error("mark_as_read failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"ok": False, "error": str(e)}
 
     @mcp.tool()
-    async def mark_as_unread(article_ids: list[int]) -> str:
+    async def mark_as_unread(article_ids: list[int]) -> dict[str, Any]:
         """Mark articles as unread.
 
         Args:
             article_ids: List of article IDs to mark as unread.
 
-        Returns "OK" on success or an error message.
+        Returns {"ok": True} on success or {"ok": False, "error": ...}.
         """
         try:
             if not article_ids:
-                return "OK"
+                return {"ok": True}
             await client.mark_as_unread(article_ids)
-            return "OK"
+            return {"ok": True}
         except Exception as e:
             logger.error("mark_as_unread failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"ok": False, "error": str(e)}
 
     @mcp.tool()
-    async def star_article(article_id: int) -> str:
+    async def star_article(article_id: int) -> dict[str, Any]:
         """Star/favorite an article.
 
         Args:
             article_id: ID of the article to star.
 
-        Returns "OK" on success or an error message.
+        Returns {"ok": True} on success or {"ok": False, "error": ...}.
         """
         try:
             await client.star_article(article_id)
-            return "OK"
+            return {"ok": True}
         except Exception as e:
             logger.error("star_article failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"ok": False, "error": str(e)}
 
     @mcp.tool()
-    async def unstar_article(article_id: int) -> str:
+    async def unstar_article(article_id: int) -> dict[str, Any]:
         """Remove star from an article.
 
         Args:
             article_id: ID of the article to unstar.
 
-        Returns "OK" on success or an error message.
+        Returns {"ok": True} on success or {"ok": False, "error": ...}.
         """
         try:
             await client.unstar_article(article_id)
-            return "OK"
+            return {"ok": True}
         except Exception as e:
             logger.error("unstar_article failed: %s", e, exc_info=True)
-            return f"Error: {e}"
+            return {"ok": False, "error": str(e)}

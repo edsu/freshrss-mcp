@@ -1,8 +1,8 @@
 """Tests for tools.py — tool registration and error boundaries.
 
 These tests verify that:
-1. Tools catch all exceptions and return 'Error: ...' strings
-2. Tools produce correct output for happy paths
+1. Tools catch all exceptions and return {"error": ...} dicts
+2. Tools produce correct structured output for happy paths
 3. The _truncate_summary helper works at boundaries
 """
 
@@ -119,17 +119,17 @@ async def test_get_unread_articles_happy_path(tools, mock_client):
     mock_client.get_articles = AsyncMock(return_value=SAMPLE_ARTICLES)
 
     result = await tools["get_unread_articles"]()
-    assert "Art 1" in result
-    assert "Art 2" in result
+    titles = [a["title"] for a in result]
+    assert "Art 1" in titles
+    assert "Art 2" in titles
 
 
 @pytest.mark.asyncio
-async def test_get_unread_articles_error_returns_string(tools, mock_client):
+async def test_get_unread_articles_error_returns_dict(tools, mock_client):
     mock_client.get_articles = AsyncMock(side_effect=RuntimeError("connection lost"))
 
     result = await tools["get_unread_articles"]()
-    assert result.startswith("Error:")
-    assert "connection lost" in result
+    assert "connection lost" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -138,16 +138,17 @@ async def test_list_feeds_happy_path(tools, mock_client):
     mock_client.get_unread_counts = AsyncMock(return_value={10: 5, 20: 0})
 
     result = await tools["list_feeds"]()
-    assert "Feed A" in result
-    assert "Feed B" in result
+    names = [f["name"] for f in result]
+    assert "Feed A" in names
+    assert "Feed B" in names
 
 
 @pytest.mark.asyncio
-async def test_list_feeds_error_returns_string(tools, mock_client):
+async def test_list_feeds_error_returns_dict(tools, mock_client):
     mock_client.list_feeds = AsyncMock(side_effect=RuntimeError("timeout"))
 
     result = await tools["list_feeds"]()
-    assert result.startswith("Error:")
+    assert "timeout" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -156,7 +157,7 @@ async def test_get_feed_info_found(tools, mock_client):
     mock_client.get_unread_counts = AsyncMock(return_value={10: 3})
 
     result = await tools["get_feed_info"](feed_id=10)
-    assert "Feed A" in result
+    assert result["name"] == "Feed A"
 
 
 @pytest.mark.asyncio
@@ -165,8 +166,7 @@ async def test_get_feed_info_not_found(tools, mock_client):
     mock_client.get_unread_counts = AsyncMock(return_value={})
 
     result = await tools["get_feed_info"](feed_id=999)
-    assert "Error:" in result
-    assert "999" in result
+    assert "999" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -174,8 +174,9 @@ async def test_search_articles_matches(tools, mock_client):
     mock_client.get_articles = AsyncMock(return_value=SAMPLE_ARTICLES)
 
     result = await tools["search_articles"](query="Art 1")
-    assert "Art 1" in result
-    assert "Art 2" not in result
+    titles = [a["title"] for a in result]
+    assert "Art 1" in titles
+    assert "Art 2" not in titles
 
 
 @pytest.mark.asyncio
@@ -183,7 +184,7 @@ async def test_search_articles_no_match(tools, mock_client):
     mock_client.get_articles = AsyncMock(return_value=SAMPLE_ARTICLES)
 
     result = await tools["search_articles"](query="nonexistent")
-    assert result == "[]"
+    assert result == []
 
 
 @pytest.mark.asyncio
@@ -191,13 +192,21 @@ async def test_search_articles_error(tools, mock_client):
     mock_client.get_articles = AsyncMock(side_effect=RuntimeError("fail"))
 
     result = await tools["search_articles"](query="test")
-    assert result.startswith("Error:")
+    assert "fail" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_articles_passes_since_timestamp(tools, mock_client):
+    mock_client.get_articles = AsyncMock(return_value=SAMPLE_ARTICLES)
+
+    await tools["search_articles"](query="Art 1", since_timestamp=1700000000)
+    assert mock_client.get_articles.call_args.kwargs["since_timestamp"] == 1700000000
 
 
 @pytest.mark.asyncio
 async def test_mark_as_read_empty_list(tools, mock_client):
     result = await tools["mark_as_read"](article_ids=[])
-    assert result == "OK"
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -205,7 +214,7 @@ async def test_mark_as_read_success(tools, mock_client):
     mock_client.mark_as_read = AsyncMock(return_value=True)
 
     result = await tools["mark_as_read"](article_ids=[1, 2, 3])
-    assert result == "OK"
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -213,7 +222,8 @@ async def test_mark_as_read_error(tools, mock_client):
     mock_client.mark_as_read = AsyncMock(side_effect=RuntimeError("server error"))
 
     result = await tools["mark_as_read"](article_ids=[1])
-    assert result.startswith("Error:")
+    assert result["ok"] is False
+    assert "server error" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -221,7 +231,7 @@ async def test_mark_as_unread_success(tools, mock_client):
     mock_client.mark_as_unread = AsyncMock(return_value=True)
 
     result = await tools["mark_as_unread"](article_ids=[1])
-    assert result == "OK"
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -229,7 +239,7 @@ async def test_star_article_success(tools, mock_client):
     mock_client.star_article = AsyncMock(return_value=True)
 
     result = await tools["star_article"](article_id=42)
-    assert result == "OK"
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -237,7 +247,8 @@ async def test_star_article_error(tools, mock_client):
     mock_client.star_article = AsyncMock(side_effect=RuntimeError("denied"))
 
     result = await tools["star_article"](article_id=42)
-    assert result.startswith("Error:")
+    assert result["ok"] is False
+    assert "denied" in result["error"]
 
 
 @pytest.mark.asyncio
@@ -245,7 +256,7 @@ async def test_unstar_article_success(tools, mock_client):
     mock_client.unstar_article = AsyncMock(return_value=True)
 
     result = await tools["unstar_article"](article_id=42)
-    assert result == "OK"
+    assert result == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -254,8 +265,9 @@ async def test_get_feed_stats_happy(tools, mock_client):
     mock_client.get_unread_counts = AsyncMock(return_value={10: 7, 20: 2})
 
     result = await tools["get_feed_stats"]()
-    assert "Feed A" in result
-    assert "7" in result
+    by_name = {row["feed_name"]: row["unread_count"] for row in result}
+    assert by_name["Feed A"] == 7
+    assert by_name["Feed B"] == 2
 
 
 @pytest.mark.asyncio
@@ -263,7 +275,7 @@ async def test_get_articles_by_feed_success(tools, mock_client):
     mock_client.get_articles = AsyncMock(return_value=[SAMPLE_ARTICLES[0]])
 
     result = await tools["get_articles_by_feed"](feed_id=10)
-    assert "Art 1" in result
+    assert result[0]["title"] == "Art 1"
 
 
 @pytest.mark.asyncio
@@ -271,4 +283,12 @@ async def test_get_articles_by_feed_error(tools, mock_client):
     mock_client.get_articles = AsyncMock(side_effect=RuntimeError("boom"))
 
     result = await tools["get_articles_by_feed"](feed_id=10)
-    assert result.startswith("Error:")
+    assert "boom" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_get_articles_by_feed_passes_since_timestamp(tools, mock_client):
+    mock_client.get_articles = AsyncMock(return_value=[SAMPLE_ARTICLES[0]])
+
+    await tools["get_articles_by_feed"](feed_id=10, since_timestamp=1700000000)
+    assert mock_client.get_articles.call_args.kwargs["since_timestamp"] == 1700000000

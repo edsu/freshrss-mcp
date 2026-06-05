@@ -210,6 +210,31 @@ tests/
   test_models.py   — Serialization, construction, edge cases
 ```
 
+## Claude Code Skills
+
+The `skills/` directory ships two Claude Code skills that drive this MCP server:
+
+- **`feed-digest`** — `/feed-digest [timeframe]` produces a digest of recent unread articles (e.g. `/feed-digest 3d`, `/feed-digest last week`). Auto-switches between a reading-queue index (≤25 posts) and a themed TL;DR (>25 posts), and offers to mark the window as read when done.
+- **`feed-search`** — `/feed-search <topic>` semantically searches all your unread articles for a topic (e.g. `/feed-search Iran`, `/feed-search interesting AI critique`). Same adaptive output format. Offers drill-deeper on individual results.
+
+### Install
+
+Symlink (recommended — picks up upstream updates when you `git pull`):
+
+```sh
+mkdir -p ~/.claude/skills
+ln -s "$PWD/skills/feed-digest" ~/.claude/skills/feed-digest
+ln -s "$PWD/skills/feed-search" ~/.claude/skills/feed-search
+```
+
+Or copy if you'd rather pin a specific version:
+
+```sh
+cp -r skills/feed-digest skills/feed-search ~/.claude/skills/
+```
+
+Restart Claude Code after installing so the skill loader picks them up. Both skills require the `freshrss` MCP server to be configured in your client.
+
 ## Known Limitations
 
 - **Client-side search**: FreshRSS API lacks server-side search; `search_articles` fetches articles then filters locally.

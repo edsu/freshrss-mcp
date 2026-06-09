@@ -60,46 +60,34 @@ Call it with:
 - `limit`: 2000 (the client pages internally via the Google Reader `continuation` token, so this is a per-call ceiling on results, not a per-HTTP-request cap)
 - `max_summary_length`: 300
 
-A week of feeds usually exceeds the inline tool-result cap (~25KB). The harness saves the full result to a file and shows a preview with a path. Load that file:
+A week of feeds usually exceeds the inline tool-result cap (~25KB). The harness saves the full result to a file and shows a preview with a path. Note the path — you'll pass it to the script in step 3.
 
-```python
-import json
-with open(path) as f:
-    data = json.load(f)
-articles = data["result"]
+Do **not** retry with a smaller `limit` to fit inline — you'll just get fewer articles. If the script reports "filtered from 2000" exactly, that's the saturation signal: there may be more in the window than you're seeing, and you should either bump `limit` higher or warn the user.
+
+### 3. Filter, survey, and strip HTML
+
+Run the processing script — it filters by `published` (not crawl time), prints a top-10 survey to stderr, and outputs filtered+stripped articles as JSON:
+
+```bash
+python skills/feed-digest/scripts/process_articles.py "$path" "$cutoff" > /tmp/freshrss_filtered.json
 ```
 
-Do **not** retry with a smaller `limit` to fit inline — you'll just get fewer articles. If `len(articles) == 2000` exactly, that's the saturation signal: there may be more in the window than you're seeing, and you should either bump `limit` higher or warn the user.
+Then get the full per-feed breakdown:
 
-### 3. Filter to the window client-side
-
-The FreshRSS `since_timestamp` flows through to the Google Reader `ot` parameter, which filters by **crawl/update time, not published time**. Articles crawled recently but originally published long ago will leak through. Apply a client-side cutoff on `published`:
-
-```python
-from datetime import datetime, timedelta
-cutoff = int((datetime.now() - timedelta(days=N)).timestamp())
-recent = [a for a in articles if a["published"] >= cutoff]
+```bash
+python skills/feed-digest/scripts/survey_articles.py /tmp/freshrss_filtered.json
 ```
 
-Hold onto `articles` (the full fetched set) — you'll use it for mark-as-read at the end.
+To browse article titles, URLs, and summaries (grouped by feed, or `--by-time` for chronological):
 
-### 4. Survey
-
-Print a quick view of `len(recent)`, a `Counter` of articles per `feed_name`, and the actual date range. This:
-- Tells you which mode to use (≤25 or >25)
-- Shows dense single-feed clusters early
-- Confirms whether `ot` is leaking older articles
-
-### 5. Strip HTML for snippet scanning
-
-```python
-import re, html
-def strip(s):
-    s = re.sub(r"<[^>]+>", "", s)
-    s = html.unescape(s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+```bash
+python skills/feed-digest/scripts/list_articles.py /tmp/freshrss_filtered.json
 ```
+
+Use the survey output to:
+- Decide which mode to use (≤25 or >25)
+- Spot dense single-feed clusters early
+- Confirm whether `ot` leaked older articles (stderr from process_articles.py shows "filtered from N")
 
 ### 6. Pick the mode and write the digest
 

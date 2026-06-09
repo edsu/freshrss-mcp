@@ -46,26 +46,24 @@ Call it with:
 - `max_summary_length`: 300
 - **No** `since_timestamp` — we want everything unread
 
-The result will almost certainly exceed the inline tool-result cap. The harness saves the full result to a file and shows a preview with a path. Load that file:
-
-```python
-import json
-with open(path) as f:
-    data = json.load(f)
-articles = data["result"]
-```
+The result will almost certainly exceed the inline tool-result cap. The harness saves the full result to a file and shows a preview with a path. Note the path — you'll pass it to the script in step 2.
 
 If `len(articles) == 2000` exactly, that's the saturation signal — there may be more unread than you're seeing. Note this to the user at the end and consider bumping `limit` higher.
 
-### 2. Strip HTML for snippet scanning
+### 2. Load and strip HTML
+
+Run the loading script — it strips HTML from all summaries and outputs clean articles as JSON:
+
+```bash
+python skills/feed-search/scripts/load_articles.py "$path" > /tmp/freshrss_articles.json
+```
+
+Then load the result:
 
 ```python
-import re, html
-def strip(s):
-    s = re.sub(r"<[^>]+>", "", s or "")
-    s = html.unescape(s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+import json
+with open("/tmp/freshrss_articles.json") as f:
+    articles = json.load(f)
 ```
 
 ### 3. Semantically filter against the topic

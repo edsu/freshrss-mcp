@@ -189,6 +189,71 @@ async def test_get_articles_empty_response(client):
     assert articles == []
 
 
+def _mock_response(items, continuation=None):
+    """Helper: build a mocked HTTP response for get_articles."""
+    body = {"items": items}
+    if continuation is not None:
+        body["continuation"] = continuation
+    resp = MagicMock()
+    resp.json.return_value = body
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_get_articles_follows_continuation(client):
+    """When the response carries a continuation token, fetch the next page."""
+    client._auth_token = "tok"
+
+    page1_item = {**SAMPLE_ITEM, "id": "tag:google.com,2005:reader/item/1"}
+    page2_item = {**SAMPLE_ITEM, "id": "tag:google.com,2005:reader/item/2"}
+
+    mock_get = AsyncMock(
+        side_effect=[
+            _mock_response([page1_item], continuation="page2-token"),
+            _mock_response([page2_item], continuation=None),
+        ]
+    )
+    with patch.object(client._client, "get", mock_get):
+        articles = await client.get_articles(limit=10)
+
+    assert [a.id for a in articles] == [1, 2]
+    assert mock_get.call_count == 2
+    second_call_params = mock_get.call_args_list[1][1]["params"]
+    assert second_call_params["c"] == "page2-token"
+
+
+@pytest.mark.asyncio
+async def test_get_articles_stops_at_limit_mid_page(client):
+    """Stop accumulating once limit is reached, even mid-page."""
+    client._auth_token = "tok"
+
+    items = [
+        {**SAMPLE_ITEM, "id": f"tag:google.com,2005:reader/item/{i}"} for i in range(5)
+    ]
+    mock_get = AsyncMock(
+        return_value=_mock_response(items, continuation="more-available")
+    )
+    with patch.object(client._client, "get", mock_get):
+        articles = await client.get_articles(limit=3)
+
+    assert len(articles) == 3
+    assert mock_get.call_count == 1  # didn't follow continuation past the limit
+
+
+@pytest.mark.asyncio
+async def test_get_articles_stops_when_no_continuation(client):
+    """Stop after a single page if no continuation token is returned."""
+    client._auth_token = "tok"
+
+    mock_get = AsyncMock(return_value=_mock_response([SAMPLE_ITEM], continuation=None))
+    with patch.object(client._client, "get", mock_get):
+        articles = await client.get_articles(limit=100)
+
+    assert len(articles) == 1
+    assert mock_get.call_count == 1
+
+
 # --- Tag Operations ---
 
 

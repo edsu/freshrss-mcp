@@ -129,11 +129,16 @@ class FreshRSSClient:
         include_read: bool = False,
         since_timestamp: int | None = None,
     ) -> list[Article]:
-        """Get articles from FreshRSS.
+        """Get articles from FreshRSS, following continuation tokens as needed.
+
+        FreshRSS caps per-request results at around 1000 items. To honor a
+        larger `limit`, this method follows the `continuation` token in each
+        response and accumulates pages until either `limit` is reached or the
+        stream is exhausted.
 
         Args:
             feed_id: Optional feed ID to filter by
-            limit: Maximum number of articles to return
+            limit: Maximum number of articles to return across all pages
             include_read: Whether to include read articles
             since_timestamp: Only return articles published after this timestamp
         """
@@ -142,21 +147,36 @@ class FreshRSSClient:
         stream_id = f"feed/{feed_id}" if feed_id else "user/-/state/com.google/reading-list"
         url = f"{self.api_url}/reader/api/0/stream/contents/{stream_id}"
 
-        params: dict[str, str | int] = {"output": "json", "n": limit}
-        if not include_read:
-            params["xt"] = "user/-/state/com.google/read"
-        if since_timestamp:
-            params["ot"] = since_timestamp
+        articles: list[Article] = []
+        continuation: str | None = None
 
-        response = await self._client.get(url, headers=headers, params=params)
-        response.raise_for_status()
+        while len(articles) < limit:
+            remaining = limit - len(articles)
+            params: dict[str, str | int] = {"output": "json", "n": remaining}
+            if not include_read:
+                params["xt"] = "user/-/state/com.google/read"
+            if since_timestamp:
+                params["ot"] = since_timestamp
+            if continuation:
+                params["c"] = continuation
 
-        data = response.json()
-        articles = []
-        for item in data.get("items", []):
-            article = self._parse_article(item)
-            if article:
-                articles.append(article)
+            response = await self._client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+            new_items = data.get("items", [])
+            if not new_items:
+                break
+            for item in new_items:
+                article = self._parse_article(item)
+                if article:
+                    articles.append(article)
+                if len(articles) >= limit:
+                    break
+
+            continuation = data.get("continuation")
+            if not continuation:
+                break
 
         logger.info("Retrieved %d articles", len(articles))
         return articles

@@ -157,8 +157,8 @@ def register_tools(mcp: FastMCP, client: FreshRSSClient) -> None:
     async def list_feeds() -> list[dict[str, Any]] | dict[str, str]:
         """List all subscribed feeds with unread counts.
 
-        Returns a list of feed dicts with id, name, url, and unread_count fields,
-        or {"error": ...}.
+        Returns a list of feed dicts with id, name, url, unread_count, and categories
+        fields, or {"error": ...}.
         """
         try:
             feeds = await client.list_feeds()

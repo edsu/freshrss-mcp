@@ -89,10 +89,12 @@ class FreshRSSClient:
         data = response.json()
         feeds = []
         for sub in data.get("subscriptions", []):
+            categories = [c["label"] for c in sub.get("categories", []) if "label" in c]
             feed = Feed(
                 id=self._extract_feed_id(sub.get("id", "")),
                 name=sub.get("title", "Unknown"),
                 url=sub.get("url", ""),
+                categories=categories,
             )
             feeds.append(feed)
 

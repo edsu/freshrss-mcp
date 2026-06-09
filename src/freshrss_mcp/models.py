@@ -37,6 +37,11 @@ class Feed:
     name: str
     url: str
     unread_count: int = 0
+    categories: list[str] = None
+
+    def __post_init__(self):
+        if self.categories is None:
+            self.categories = []
 
     def to_dict(self) -> dict:
         return {
@@ -44,4 +49,5 @@ class Feed:
             "name": self.name,
             "url": self.url,
             "unread_count": self.unread_count,
+            "categories": self.categories,
         }

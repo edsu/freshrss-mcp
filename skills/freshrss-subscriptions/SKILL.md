@@ -1,10 +1,10 @@
 ---
-name: feed-subscriptions
+name: freshrss-subscriptions
 description: >-
   List the user's FreshRSS subscriptions that have unread articles in a given
   timeframe, with counts and sample titles. Use when the user asks "which feeds
   have new posts?", "what subscriptions are active this week?", or invokes
-  `/feed-subscriptions`. Requires the freshrss MCP server.
+  `/freshrss-subscriptions`. Requires the freshrss MCP server.
 ---
 
 # Feed subscriptions
@@ -17,14 +17,14 @@ counts and a couple of sample titles per feed, sorted by volume.
 - "Which feeds have new posts this week?"
 - "What subscriptions are active today?"
 - "Show me what feeds have unread articles"
-- Invoked as `/feed-subscriptions` (with or without a time argument)
+- Invoked as `/freshrss-subscriptions` (with or without a time argument)
 
 ## Arguments
 
 Takes an optional free-text time-frame argument. Examples:
 
-- `/feed-subscriptions` → default 7 days
-- `/feed-subscriptions 1d` / `24h` / `yesterday` / `3d` / `2w` / `last month`
+- `/freshrss-subscriptions` → default 7 days
+- `/freshrss-subscriptions 1d` / `24h` / `yesterday` / `3d` / `2w` / `last month`
 
 If `args` is empty, use **7 days**.
 
@@ -55,13 +55,13 @@ The result will likely exceed the inline cap and be saved to a file. Note the pa
 ### 3. Filter and process
 
 ```bash
-python skills/feed-digest/scripts/process_articles.py "$path" "$cutoff" > /tmp/freshrss_filtered.json
+python skills/freshrss-digest/scripts/process_articles.py "$path" "$cutoff" > /tmp/freshrss_filtered.json
 ```
 
 ### 4. List feeds
 
 ```bash
-python skills/feed-subscriptions/scripts/list_feeds.py /tmp/freshrss_filtered.json
+python skills/freshrss-subscriptions/scripts/list_feeds.py /tmp/freshrss_filtered.json
 ```
 
 This prints each feed sorted by unread count, with up to 2 sample article titles
@@ -79,5 +79,5 @@ published within the window.
 ## Notes
 
 - This skill does not offer mark-as-read — it's a read-only overview.
-- For a full narrative digest, use `/feed-digest`.
-- For searching within feeds, use `/feed-search`.
+- For a full narrative digest, use `/freshrss-digest`.
+- For searching within feeds, use `/freshrss-search`.

@@ -1,9 +1,9 @@
 ---
-name: feed-digest
+name: freshrss-digest
 description: >-
   Produce a digest of recent unread articles from the user's FreshRSS feeds.
   Use when the user asks for a digest of their feeds, "what's new in my feeds",
-  "summarize the posts from the last N days/week", or invokes `/feed-digest`.
+  "summarize the posts from the last N days/week", or invokes `/freshrss-digest`.
   Requires the freshrss MCP server.
 ---
 
@@ -21,14 +21,14 @@ After the digest, offer to mark all articles in the window as read.
 - "Summarize the posts from the last week"
 - "What's new in my feeds?"
 - "Give me a digest of the last N days"
-- Invoked as `/feed-digest` (with or without a time argument)
+- Invoked as `/freshrss-digest` (with or without a time argument)
 
 ## Arguments
 
-`/feed-digest` takes an optional free-text time-frame argument. Examples:
+`/freshrss-digest` takes an optional free-text time-frame argument. Examples:
 
-- `/feed-digest` → default 7 days
-- `/feed-digest 3d` / `3 days` / `last week` / `24h` / `yesterday` / `2w` / `last month`
+- `/freshrss-digest` → default 7 days
+- `/freshrss-digest 3d` / `3 days` / `last week` / `24h` / `yesterday` / `2w` / `last month`
 
 If `args` is empty, use **7 days**.
 
@@ -69,19 +69,19 @@ Do **not** retry with a smaller `limit` to fit inline — you'll just get fewer 
 Run the processing script — it filters by `published` (not crawl time), prints a top-10 survey to stderr, and outputs filtered+stripped articles as JSON:
 
 ```bash
-python skills/feed-digest/scripts/process_articles.py "$path" "$cutoff" > /tmp/freshrss_filtered.json
+python skills/freshrss-digest/scripts/process_articles.py "$path" "$cutoff" > /tmp/freshrss_filtered.json
 ```
 
 Then get the full per-feed breakdown:
 
 ```bash
-python skills/feed-digest/scripts/survey_articles.py /tmp/freshrss_filtered.json
+python skills/freshrss-digest/scripts/survey_articles.py /tmp/freshrss_filtered.json
 ```
 
 To browse article titles, URLs, and summaries (grouped by feed, or `--by-time` for chronological):
 
 ```bash
-python skills/feed-digest/scripts/list_articles.py /tmp/freshrss_filtered.json
+python skills/freshrss-digest/scripts/list_articles.py /tmp/freshrss_filtered.json
 ```
 
 Use the survey output to:

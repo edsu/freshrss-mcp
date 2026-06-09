@@ -1,10 +1,10 @@
 ---
-name: feed-search
+name: freshrss-search
 description: >-
   Search the user's unread FreshRSS articles for a specific topic, using
   semantic relevance over titles and summaries. Use when the user asks
   "what's in my feeds about X", "any news on X in my feeds", or invokes
-  `/feed-search <topic>`. Requires the freshrss MCP server.
+  `/freshrss-search <topic>`. Requires the freshrss MCP server.
 ---
 
 # Feed search
@@ -20,17 +20,17 @@ After presenting results, offer to drill deeper on a specific item by fetching i
 
 ## When to use
 
-- `/feed-search <topic>` (e.g. `/feed-search what's happening with Iran`, `/feed-search AI regulation`, `/feed-search local DC news`)
+- `/freshrss-search <topic>` (e.g. `/feed-search what's happening with Iran`, `/feed-search AI regulation`, `/feed-search local DC news`)
 - "What's in my feeds about X?"
 - "Any unread posts on X?"
 
 ## Arguments
 
-`/feed-search` takes a **free-text topic phrase** as its argument. Interpret it as the user's topical intent — extract both literal keywords and the broader concept. Examples:
+`/freshrss-search` takes a **free-text topic phrase** as its argument. Interpret it as the user's topical intent — extract both literal keywords and the broader concept. Examples:
 
-- `/feed-search Iran` → literal mentions of Iran, plus related (Israel/Gaza, US strikes, oil, sanctions)
-- `/feed-search what's happening with the Supreme Court` → SCOTUS rulings, nominations, related legal news
-- `/feed-search interesting AI critique` → not "anything about AI" but specifically critical or skeptical pieces
+- `/freshrss-search Iran` → literal mentions of Iran, plus related (Israel/Gaza, US strikes, oil, sanctions)
+- `/freshrss-search what's happening with the Supreme Court` → SCOTUS rulings, nominations, related legal news
+- `/freshrss-search interesting AI critique` → not "anything about AI" but specifically critical or skeptical pieces
 
 If `args` is empty, ask the user what topic they want to search for. Don't guess.
 
@@ -55,7 +55,7 @@ If `len(articles) == 2000` exactly, that's the saturation signal — there may b
 Run the loading script — it strips HTML from all summaries and outputs clean articles as JSON:
 
 ```bash
-python skills/feed-search/scripts/load_articles.py "$path" > /tmp/freshrss_articles.json
+python skills/freshrss-search/scripts/load_articles.py "$path" > /tmp/freshrss_articles.json
 ```
 
 Then load the result:
@@ -121,4 +121,4 @@ If matches are very sparse (1–3 items) but exist, present them and add the sam
 
 - The freshrss MCP server returns structured JSON since the `tools-json-output-and-since-timestamp` branch — no `ast.literal_eval` needed.
 - This skill produces a chat-only result — no file writes unless asked.
-- Unlike `/feed-digest`, this skill does **not** offer mark-as-read by default. Topic-search matches are usually things the user *wants* to read; clearing them would be counterproductive. If the user explicitly asks to mark them read or to star them, do so via `mcp__freshrss__mark_as_read` or `mcp__freshrss__star_article`.
+- Unlike `/freshrss-digest`, this skill does **not** offer mark-as-read by default. Topic-search matches are usually things the user *wants* to read; clearing them would be counterproductive. If the user explicitly asks to mark them read or to star them, do so via `mcp__freshrss__mark_as_read` or `mcp__freshrss__star_article`.

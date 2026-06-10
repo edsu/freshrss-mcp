@@ -1,3 +1,7 @@
+**NOTE: this project fork is no longer in use. I'm now using edsu/freshrss-claude instead to make it easier to use with Claude**
+
+---
+
 # FreshRSS MCP Server
 
 An MCP server that wraps the FreshRSS Google Reader API, exposing RSS feed management as tools for AI agents. Uses **Streamable HTTP** transport for integration with the OpenClaw gateway via the `openclaw-mcp-bridge` plugin.

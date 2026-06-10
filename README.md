@@ -1,4 +1,4 @@
-**NOTE: this project fork is no longer in use. I'm now using edsu/freshrss-claude instead to make it easier to use with Claude**
+**NOTE: this project fork is no longer in use. I'm now using [edsu/freshrss-claude](https://github.com/edsu/freshrss-claude) instead to make it easier to use with Claude**
 
 ---
 
